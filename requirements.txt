@@ -1,0 +1,12 @@
+
+numpy<2
+PyQt5==5.15.9
+sentence-transformers>=3.0.0
+faiss-cpu>=1.8.0
+torch>=2.4.0
+transformers>=4.40.0
+scikit-learn>=1.4.2
+scipy>=1.13.0
+tqdm>=4.66.2
+ollama
+peft>=0.4.0
