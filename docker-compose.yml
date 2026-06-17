@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.15-enterprise
+    container_name: codebrain-neo4j
+    
+    environment:
+      # License agreement (required for Enterprise Edition)
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: eval
+      NEO4J_AUTH: neo4j/codebrain2024
+      NEO4J_PLUGINS: '["graph-data-science"]'
+      NEO4J_dbms_memory_heap_max__size: 2G
+      NEO4J_dbms_memory_pagecache_size: 1G
+      # Enable vector search (Neo4j 5.15+)
+      NEO4J_server_bolt_listen__address: 0.0.0.0:7687
+    
+    ports:
+      # Bolt protocol (Python driver)
+      - "7687:7687"
+      # Browser UI
+      - "7474:7474"
+      # HTTP API
+      - "7473:7473"
+    
+    volumes:
+      # Persist database data
+      - neo4j_data:/var/lib/neo4j/data
+      # Persist import files
+      - neo4j_imports:/var/lib/neo4j/import
+      # Persist logs
+      - neo4j_logs:/var/lib/neo4j/logs
+    
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "codebrain2024", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    restart: unless-stopped
+    
+    networks:
+      - codebrain-network
+
+  # Optional: pgAdmin for database management
+  neo4j-admin:
+    image: phpmyadmin:latest
+    container_name: codebrain-admin
+    environment:
+      # This is a placeholder - Neo4j doesn't use phpmyadmin
+      # Use http://localhost:7474 instead for Neo4j Browser
+      UPLOAD_LIMIT: 300M
+    ports:
+      - "7474:80"
+    depends_on:
+      - neo4j
+    networks:
+      - codebrain-network
+    profiles:
+      - admin-ui
+
+volumes:
+  neo4j_data:
+  neo4j_imports:
+  neo4j_logs:
+
+networks:
+  codebrain-network:
+    driver: bridge
