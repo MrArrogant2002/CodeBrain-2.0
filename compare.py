@@ -1,8 +1,11 @@
 """
 Side-by-side comparison: Normal RAG vs Graph RAG.
 
-Both systems run on the same query and the same sample_codebase/.
+Both systems run on the same query and the same codebase.
 Results are printed side by side with retrieval and LLM timing.
+
+Graph RAG answers from whatever was last ingested into Neo4j — make sure the
+--path here matches the path passed to graph_rag.ingest.
 
 Usage:
     python compare.py
@@ -10,6 +13,7 @@ Usage:
     python compare.py --query "..." --model qwen2.5-coder:7b
     python compare.py --query "..." --normal-model codellama --graph-model qwen2.5-coder:7b
     python compare.py --top-k 8
+    python compare.py --path BMS_Source_Code --query "How are cell voltages read?"
 """
 
 import argparse
@@ -33,7 +37,7 @@ from normal_rag.vector_store import VectorStore
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
-CODEBASE_PATH = "sample_codebase"
+DEFAULT_CODEBASE_PATH = "sample_codebase"
 WIDE = "=" * 72
 THIN = "-" * 72
 
@@ -68,23 +72,24 @@ def _graph_retrieve(query: str, top_k: int) -> str:
 # ── Comparison ─────────────────────────────────────────────────────────────────
 
 
-def compare(query: str, normal_model: str, graph_model: str, top_k: int) -> None:
+def compare(
+    query: str, normal_model: str, graph_model: str, top_k: int, path: str
+) -> None:
     print(f"\n{WIDE}")
     print("  NORMAL RAG  vs  GRAPH RAG -- Side-by-Side Comparison")
     print(WIDE)
     print(f"  Query        : {query}")
+    print(f"  Codebase     : {path}")
     print(f"  Normal model : {normal_model}")
     print(f"  Graph  model : {graph_model}")
     print(f"  Top-K        : {top_k}")
     print(WIDE)
 
     # ── shared parse + embed (Normal RAG needs it; Graph RAG uses Neo4j)
-    print("\n[*] Parsing and embedding sample_codebase/ for Normal RAG ...")
-    chunks = parse_directory(CODEBASE_PATH)
+    print(f"\n[*] Parsing and embedding {path}/ for Normal RAG ...")
+    chunks = parse_directory(path)
     if not chunks:
-        print(
-            f"ERROR: No chunks found in '{CODEBASE_PATH}'. Run from the project root."
-        )
+        print(f"ERROR: No chunks found in '{path}'. Run from the project root.")
         sys.exit(1)
     chunks = embed_chunks(chunks)
     normal_store = VectorStore(chunks)
@@ -174,6 +179,14 @@ def main() -> None:
         help="Question to ask both systems",
     )
     parser.add_argument(
+        "--path",
+        default=DEFAULT_CODEBASE_PATH,
+        help=(
+            f"Directory of source files (default: {DEFAULT_CODEBASE_PATH}). "
+            "Must match what was ingested into Neo4j for Graph RAG."
+        ),
+    )
+    parser.add_argument(
         "--model",
         default=None,
         help="Ollama model for both systems (overrides --normal-model and --graph-model)",
@@ -199,7 +212,7 @@ def main() -> None:
     normal_model = args.model or args.normal_model
     graph_model = args.model or args.graph_model
 
-    compare(args.query, normal_model, graph_model, args.top_k)
+    compare(args.query, normal_model, graph_model, args.top_k, args.path)
 
 
 if __name__ == "__main__":

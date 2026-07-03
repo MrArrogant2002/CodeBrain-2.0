@@ -1,12 +1,13 @@
 """
 Graph RAG ingestion — run this once before querying.
 
-Parses a Python directory, embeds all entities, and writes them into
-Neo4j as a property graph (CodeEntity nodes + CALLS edges).
+Parses a source directory (Python .py and/or C .c/.h files), embeds all
+entities, and writes them into Neo4j as a property graph
+(CodeEntity nodes + CALLS edges). Build directories (Debug/, etc.) are skipped.
 
 Usage:
-    python -m graph_rag.ingest --path sample_codebase
     python -m graph_rag.ingest --path sample_codebase --clear
+    python -m graph_rag.ingest --path BMS_Source_Code --clear
 """
 
 import argparse
@@ -29,7 +30,9 @@ def main() -> None:
         description="Graph RAG — ingest Python source into Neo4j"
     )
     parser.add_argument(
-        "--path", required=True, help="Directory of Python source files to ingest"
+        "--path",
+        required=True,
+        help="Directory of source files to ingest (.py, .c, .h)",
     )
     parser.add_argument(
         "--clear", action="store_true", help="Clear existing graph before ingesting"
@@ -56,7 +59,7 @@ def main() -> None:
         store.build_graph(entities)
 
     calls_total = sum(len(e.calls) for e in entities)
-    logger.info("Done: %d nodes, %d potential CALLS edges", len(entities), calls_total)
+    logger.info("Done: %d nodes, %d call sites parsed", len(entities), calls_total)
     logger.info("Neo4j Browser: http://localhost:7474  (neo4j / codebrain2024)")
 
 

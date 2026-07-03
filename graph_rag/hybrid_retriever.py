@@ -22,7 +22,7 @@ class HybridRetriever:
     def retrieve(self, query: str, top_k: int = VECTOR_TOP_K) -> str:
         """
         1. Embed query -> vector search -> top_k entry points
-        2. Expand each entry point via CALLS edges (callees + callers)
+        2. Expand GRAPH_HOP_DEPTH hops via CALLS edges (callees + callers)
         3. Format and return a single context string
         """
         query_vec = self._model.encode(query).tolist()
@@ -34,23 +34,31 @@ class HybridRetriever:
 
         seen: set = set()
         sections: List[str] = []
+        frontier: List[str] = []
 
         for hit in hits:
-            name = hit["name"]
-            if name not in seen:
-                seen.add(name)
+            if hit["qname"] not in seen:
+                seen.add(hit["qname"])
                 sections.append(_format_entity(hit, label="[VECTOR HIT]"))
+                frontier.append(hit["qname"])
 
-            if GRAPH_HOP_DEPTH >= 1:
-                for callee in self._store.get_callees(name):
-                    if callee["name"] not in seen:
-                        seen.add(callee["name"])
+        for _hop in range(GRAPH_HOP_DEPTH):
+            next_frontier: List[str] = []
+            for qname in frontier:
+                for callee in self._store.get_callees(qname):
+                    if callee["qname"] not in seen:
+                        seen.add(callee["qname"])
                         sections.append(_format_entity(callee, label="[CALLEE]"))
+                        next_frontier.append(callee["qname"])
 
-                for caller in self._store.get_callers(name):
-                    if caller["name"] not in seen:
-                        seen.add(caller["name"])
+                for caller in self._store.get_callers(qname):
+                    if caller["qname"] not in seen:
+                        seen.add(caller["qname"])
                         sections.append(_format_entity(caller, label="[CALLER]"))
+                        next_frontier.append(caller["qname"])
+            frontier = next_frontier
+            if not frontier:
+                break
 
         logger.info("Retrieved %d entities (%d vector hits)", len(seen), len(hits))
         return "\n\n".join(sections)

@@ -1,14 +1,15 @@
 """
 Normal RAG — run script.
 
-Parses sample_codebase/, builds a FAISS index, retrieves the top-k most
-similar chunks for a query, and generates an answer with Ollama.
+Parses a codebase (Python or C), builds a FAISS index, retrieves the top-k
+most similar chunks for a query, and generates an answer with Ollama.
 
 Usage:
     python -m normal_rag.run
     python -m normal_rag.run --query "How does login verify a password?"
     python -m normal_rag.run --query "..." --model qwen2.5-coder:7b
     python -m normal_rag.run --top-k 8
+    python -m normal_rag.run --path BMS_Source_Code --query "How are cell voltages read?"
 """
 
 import argparse
@@ -24,7 +25,7 @@ from normal_rag.vector_store import VectorStore
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
-CODEBASE_PATH = "sample_codebase"
+DEFAULT_CODEBASE_PATH = "sample_codebase"
 SEP = "-" * 70
 
 
@@ -42,14 +43,12 @@ def build_context(
     return "\n\n".join(sections)
 
 
-def run(query: str, model: str, top_k: int) -> str:
+def run(query: str, model: str, top_k: int, path: str = DEFAULT_CODEBASE_PATH) -> str:
     """Full pipeline: parse → embed → search → generate."""
-    print(f"\n[Normal RAG] Parsing and embedding {CODEBASE_PATH}/ ...")
-    chunks = parse_directory(CODEBASE_PATH)
+    print(f"\n[Normal RAG] Parsing and embedding {path}/ ...")
+    chunks = parse_directory(path)
     if not chunks:
-        print(
-            f"ERROR: No code chunks found in '{CODEBASE_PATH}'. Run from the project root."
-        )
+        print(f"ERROR: No code chunks found in '{path}'. Run from the project root.")
         sys.exit(1)
 
     chunks = embed_chunks(chunks)
@@ -94,6 +93,11 @@ def main() -> None:
         "--query", default="", help="Question to ask (omit for interactive mode)"
     )
     parser.add_argument(
+        "--path",
+        default=DEFAULT_CODEBASE_PATH,
+        help=f"Directory of source files to query (default: {DEFAULT_CODEBASE_PATH})",
+    )
+    parser.add_argument(
         "--model",
         default=OLLAMA_MODEL,
         help=f"Ollama model name (default: {OLLAMA_MODEL})",
@@ -113,12 +117,12 @@ def main() -> None:
             while True:
                 query = input("Your question: ").strip()
                 if query:
-                    run(query, args.model, args.top_k)
+                    run(query, args.model, args.top_k, args.path)
                     print()
         except KeyboardInterrupt:
             print("\nBye.")
     else:
-        run(query, args.model, args.top_k)
+        run(query, args.model, args.top_k, args.path)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ A prototype that compares two retrieval strategies for code Q&A:
 - **Normal RAG** — FAISS flat vector search. Finds the most similar code chunks by embedding similarity alone.
 - **Graph RAG** — Neo4j property graph + CALLS-edge expansion. Finds entry points by similarity, then follows call relationships to assemble the full execution context.
 
-Both systems work on the same Python sample codebase and answer questions using a local LLM via Ollama.
+Both systems parse **Python (`.py`) and C (`.c`/`.h`)** codebases and answer questions using a local LLM via Ollama. Two corpora ship with the repo: the small Python `sample_codebase/` and the real-world `BMS_Source_Code/` (NXP S32K144 battery-management firmware).
 
 ---
 
@@ -37,6 +37,12 @@ CODEBRAIN/
 |   |-- database.py
 |   |-- api_handler.py
 |   `-- data_validator.py
+|
+|-- BMS_Source_Code/          Real C firmware corpus (S32K144 + MC33771C BCC)
+|   |-- Sources/              Application code (main.c, mc33771c/, uja_sbc/, ...)
+|   |-- Generated_Code/       Processor Expert peripheral config
+|   |-- SDK/                  NXP platform drivers
+|   `-- Debug/                Build output -- automatically skipped by the parsers
 |
 |-- normal_rag/               Normal RAG system (FAISS, no server required)
 |   |-- config.py
@@ -87,10 +93,10 @@ Self-contained Normal RAG pipeline. No server or database required.
 | File | Purpose |
 |---|---|
 | `config.py` | All tunable settings: embedding model, Ollama model, vector top-k |
-| `code_parser.py` | Parses `.py` files with tree-sitter into `CodeChunk` objects, generates embeddings |
+| `code_parser.py` | Parses `.py`, `.c`, and `.h` files with tree-sitter into `CodeChunk` objects (functions, classes, structs, enums, typedefs); skips build dirs like `Debug/` |
 | `vector_store.py` | Wraps a FAISS `IndexFlatL2` — builds the index from chunk embeddings, runs top-k search |
 | `ollama_client.py` | Single `ask(prompt, model)` function that calls Ollama and returns the response string |
-| `run.py` | Main entry point — CLI with `--query`, `--model`, `--top-k` flags; also has interactive mode |
+| `run.py` | Main entry point — CLI with `--path`, `--query`, `--model`, `--top-k` flags; also has interactive mode |
 
 ---
 
@@ -100,10 +106,10 @@ Graph RAG pipeline. Requires Neo4j running via Docker.
 
 | File | Purpose |
 |---|---|
-| `config.py` | All tunable settings: Neo4j URI/credentials, embedding model, Ollama model, top-k, hop depth |
-| `code_parser.py` | Parses `.py` files with tree-sitter into `ParsedEntity` objects (includes `calls` list), generates embeddings |
-| `graph_store.py` | Neo4j wrapper — creates schema, ingests nodes and CALLS edges, runs vector search and graph traversal queries |
-| `hybrid_retriever.py` | Orchestrates: embed query → vector search → expand via CALLS edges → format context string |
+| `config.py` | All tunable settings; Neo4j credentials read from environment / `.env` with dev defaults |
+| `code_parser.py` | Parses `.py`, `.c`, and `.h` files with tree-sitter into `ParsedEntity` objects (includes `calls` list); skips build dirs like `Debug/` |
+| `graph_store.py` | Neo4j wrapper — creates schema, batch-ingests nodes and CALLS edges (identity = `qname` i.e. `file::name`, so same-named C functions in different files stay distinct), runs vector search and graph traversal queries |
+| `hybrid_retriever.py` | Orchestrates: embed query → vector search → expand `GRAPH_HOP_DEPTH` hops via CALLS edges → format context string |
 | `ollama_client.py` | Single `ask(prompt, model)` function that calls Ollama and returns the response string |
 | `ingest.py` | CLI — parse → embed → write to Neo4j. Run once before querying |
 | `run.py` | Main entry point — queries Neo4j + generates answer. CLI with `--query`, `--model`, `--top-k`; also has interactive mode |
@@ -217,6 +223,12 @@ python -m normal_rag.run --query "..." --top-k 8
 python -m normal_rag.run --query "What does register_user do?" --model qwen2.5-coder:7b --top-k 8
 ```
 
+### Query a different codebase (e.g. the BMS firmware)
+
+```bash
+python -m normal_rag.run --path BMS_Source_Code --query "How are cell voltages read from the MC33771C?"
+```
+
 ---
 
 ## 6. Running Graph RAG
@@ -243,10 +255,14 @@ Username: neo4j
 Password: codebrain2024
 ```
 
-### Step 2 — Ingest the codebase (run once, or when sample_codebase changes)
+### Step 2 — Ingest a codebase (run once, or when the source changes)
 
 ```bash
+# Python demo corpus
 python -m graph_rag.ingest --path sample_codebase --clear
+
+# or: real C firmware corpus (~1600 entities, embedding takes a few minutes)
+python -m graph_rag.ingest --path BMS_Source_Code --clear
 ```
 
 Expected output:
@@ -384,16 +400,16 @@ Common models for code Q&A:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt connection string |
-| `NEO4J_USER` | `neo4j` | Neo4j username |
-| `NEO4J_PASSWORD` | `codebrain2024` | Must match `NEO4J_AUTH` in `docker-compose.yml` |
+| `NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt connection string (env var / `.env` override) |
+| `NEO4J_USER` | `neo4j` | Neo4j username (env var / `.env` override) |
+| `NEO4J_PASSWORD` | `codebrain2024` | Must match `NEO4J_AUTH` in `docker-compose.yml` (env var / `.env` override) |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Must be the same model used during ingestion |
 | `EMBEDDING_DIM` | `384` | Must match the embedding model |
 | `VECTOR_INDEX_NAME` | `code_entity_embeddings` | Name of the Neo4j vector index |
 | `OLLAMA_MODEL` | `codellama` | Default LLM for answer generation |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |
 | `VECTOR_TOP_K` | `5` | Initial vector-search entry points |
-| `GRAPH_HOP_DEPTH` | `1` | How many CALLS hops to follow from each entry point |
+| `GRAPH_HOP_DEPTH` | `1` | How many CALLS hops to follow from each entry point (2+ expands transitively — context grows fast) |
 
 > If you change `EMBEDDING_MODEL` or `EMBEDDING_DIM`, you must re-run ingestion with `--clear` so the graph and vector index match the new model.
 
@@ -483,6 +499,9 @@ MATCH (n:CodeEntity {name: "login"})-[:CALLS]->(c) RETURN n, c
 
 -- Who calls verify_password?
 MATCH (c)-[:CALLS]->(n:CodeEntity {name: "verify_password"}) RETURN c, n
+
+-- Node identity is qname (file::name); name alone may match several nodes
+MATCH (n:CodeEntity) WHERE n.name = "CAN0_ORed_IRQHandler" RETURN n.qname
 ```
 
 ### Changing the Neo4j password
@@ -575,6 +594,7 @@ Answer
 |---|---|---|
 | `ModuleNotFoundError: No module named 'normal_rag'` | Running from wrong directory | Run from the `CODEBRAIN/` root, not from inside a subfolder |
 | `ModuleNotFoundError: No module named 'tree_sitter_python'` | Missing package | `pip install tree-sitter tree-sitter-python` |
+| `ModuleNotFoundError: No module named 'tree_sitter_c'` | Missing package | `pip install tree-sitter-c` |
 | `RuntimeError: Ollama error` | Ollama not running | Start Ollama: run `ollama serve` in a separate terminal |
 | `Model not found` | Model not pulled | `ollama pull <model-name>` |
 | `AuthError: The client is unauthorized` | Wrong Neo4j password | Check `NEO4J_PASSWORD` in `graph_rag/config.py` matches `docker-compose.yml` |

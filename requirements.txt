@@ -13,6 +13,7 @@ numpy<2
 # AST parsing
 tree-sitter>=0.22.0
 tree-sitter-python>=0.25.0
+tree-sitter-c>=0.24.0
 
 # Graph database (Graph RAG)
 neo4j>=5.15.0
