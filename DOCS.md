@@ -5,7 +5,9 @@ A prototype that compares two retrieval strategies for code Q&A:
 - **Normal RAG** — FAISS flat vector search. Finds the most similar code chunks by embedding similarity alone.
 - **Graph RAG** — Neo4j property graph + CALLS-edge expansion. Finds entry points by similarity, then follows call relationships to assemble the full execution context.
 
-Both systems parse **Python (`.py`) and C (`.c`/`.h`)** codebases and answer questions using a local LLM via Ollama. Two corpora ship with the repo: the small Python `sample_codebase/` and the real-world `BMS_Source_Code/` (NXP S32K144 battery-management firmware).
+Both systems parse **Python (`.py`) and C (`.c`/`.h`)** codebases and answer questions using a local LLM via Ollama.
+
+**What is included vs. what you add:** only the small Python `sample_codebase/` ships with the repo — all commands work against it out of the box. To analyze a real codebase, copy your own directory of `.py`/`.c`/`.h` files into the project root and pass its name via `--path`. The documentation's examples use `BMS_Source_Code/` (NXP S32K144 battery-management firmware) as the private corpus; that folder is confidential, listed in `.gitignore`, and **not part of the repository** — substitute your own source directory. If your codebase is private too, add its folder name to `.gitignore` before committing.
 
 ---
 
@@ -38,7 +40,9 @@ CODEBRAIN/
 |   |-- api_handler.py
 |   `-- data_validator.py
 |
-|-- BMS_Source_Code/          Real C firmware corpus (S32K144 + MC33771C BCC)
+|-- BMS_Source_Code/          Private C firmware corpus (S32K144 + MC33771C BCC)
+|   |                         NOT in git (.gitignore) -- you supply your own codebase
+|   |                         folder here; any directory of .py/.c/.h files works
 |   |-- Sources/              Application code (main.c, mc33771c/, uja_sbc/, ...)
 |   |-- Generated_Code/       Processor Expert peripheral config
 |   |-- SDK/                  NXP platform drivers
@@ -145,6 +149,20 @@ ollama --version
 ```
 
 Make sure **Docker Desktop is open and running** before any Graph RAG step.
+
+### Adding a codebase to analyze
+
+`sample_codebase/` is included and needs no setup. For anything else, copy the source
+directory into the project root:
+
+```
+CODEBRAIN/
+|-- MyFirmware_Source/     <- your folder (any name; .py/.c/.h files, any nesting)
+```
+
+Then use `--path MyFirmware_Source` in the commands below. Build directories
+(`Debug/`, `Release/`, `build/`, `dist/`) inside it are skipped automatically.
+If the code is private, add the folder name to `.gitignore` first.
 
 ---
 

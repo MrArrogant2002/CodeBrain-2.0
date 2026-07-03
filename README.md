@@ -13,10 +13,16 @@ CodeBrain answers natural-language questions about a codebase using two competin
 
 Both systems parse **Python (`.py`) and C (`.c`/`.h`)** with tree-sitter, embed with sentence-transformers (`all-MiniLM-L6-v2`), and generate answers with a local LLM through Ollama (default `codellama`).
 
-Two corpora ship with the repo:
+## What you need to provide
 
-- `sample_codebase/` — a small Python auth/API demo with deliberate deep call chains
-- `BMS_Source_Code/` — real NXP S32K144 battery-management firmware (MC33771C battery cell controller, ~1,600 entities across 74 C files)
+Only the small demo corpus ships with the repo — **to analyze a real codebase you add it yourself**:
+
+- `sample_codebase/` — included. A small Python auth/API demo with deliberate deep call chains; everything works out of the box against it.
+- **Your own codebase — not included.** Copy any directory of `.py`, `.c`, or `.h` files into the project root (e.g. `MyProject_Source/`) and point the commands at it with `--path MyProject_Source`. Build-output directories (`Debug/`, `Release/`, `build/`, `dist/`) are skipped automatically.
+
+> The examples below use `BMS_Source_Code/` (NXP S32K144 battery-management firmware, ~1,600 entities across 74 C files) as the private corpus. That folder is confidential and deliberately **not in this repository** (see `.gitignore`) — substitute your own source directory.
+
+If you keep your codebase private too, add its folder name to `.gitignore` before your first commit.
 
 ## How it works
 
@@ -75,8 +81,8 @@ no `--query` for interactive mode.
 normal_rag/          FAISS pipeline: config, parser, vector store, CLI
 graph_rag/           Neo4j pipeline: config, parser, graph store, hybrid retriever, ingest, CLI
 compare.py           Runs both systems on one query with timing summary
-sample_codebase/     Python demo corpus
-BMS_Source_Code/     C firmware corpus (S32K144 + MC33771C)
+sample_codebase/     Python demo corpus (included)
+<your codebase>/     Your own .py/.c/.h source directory (you add this; gitignored if private)
 docker-compose.yml   Neo4j 5.15 container
 DOCS.md              Complete documentation
 ```
