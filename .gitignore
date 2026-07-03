@@ -68,3 +68,6 @@ logs/
 
 # ── Claude Code ───────────────────────────────────────────────────────────────
 .claude/
+
+# Confidential firmware corpus - never commit
+BMS_Source_Code/
